@@ -59,21 +59,47 @@ export const createEmptyGameState = (): GameState => {
 // For now, implementing a placeholder setup.
 
 export const setupStandardBoard = (gs: GameState): void => {
-    // PLACEHOLDER SETUP - needs verification
-    // White pieces on Ring 0, Files 6,7,8,9
-    // Black pieces on Ring 3, Files 6,7,8,9
+    // Byzantine / Circular Chess Setup
+    // White occupies Files 15, 0, 1, 2
+    // Black occupies Files 7, 8, 9, 10
 
-    // Just put Kings for testing
-    addPiece(gs, 'white', 'king', 0, 8);
-    addPiece(gs, 'black', 'king', 3, 8);
+    // White Pieces (Files 0, 1)
+    // File 0: King (Inner) -> Rook (Outer)
+    addPiece(gs, 'white', 'king', 0, 0);
+    addPiece(gs, 'white', 'bishop', 1, 0);
+    addPiece(gs, 'white', 'knight', 2, 0);
+    addPiece(gs, 'white', 'rook', 3, 0);
 
-    // Rooks
-    addPiece(gs, 'white', 'rook', 0, 0);
-    addPiece(gs, 'black', 'rook', 3, 0);
+    // File 1: Queen (Inner) -> Rook (Outer)
+    addPiece(gs, 'white', 'queen', 0, 1);
+    addPiece(gs, 'white', 'bishop', 1, 1);
+    addPiece(gs, 'white', 'knight', 2, 1);
+    addPiece(gs, 'white', 'rook', 3, 1);
 
-    // Pawns to test captures
-    addPiece(gs, 'white', 'pawn', 1, 8);
-    addPiece(gs, 'black', 'pawn', 2, 8);
+    // White Pawns (Files 15, 2 - Flanking)
+    for (let r = 0; r < 4; r++) {
+        addPiece(gs, 'white', 'pawn', r, 15);
+        addPiece(gs, 'white', 'pawn', r, 2);
+    }
+
+    // Black Pieces (Files 8, 9)
+    // File 8: King (Inner) -> Rook (Outer) - Facing White King
+    addPiece(gs, 'black', 'king', 0, 8);
+    addPiece(gs, 'black', 'bishop', 1, 8);
+    addPiece(gs, 'black', 'knight', 2, 8);
+    addPiece(gs, 'black', 'rook', 3, 8);
+
+    // File 9: Queen (Inner) -> Rook (Outer)
+    addPiece(gs, 'black', 'queen', 0, 9);
+    addPiece(gs, 'black', 'bishop', 1, 9);
+    addPiece(gs, 'black', 'knight', 2, 9);
+    addPiece(gs, 'black', 'rook', 3, 9);
+
+    // Black Pawns (Files 7, 10 - Flanking)
+    for (let r = 0; r < 4; r++) {
+        addPiece(gs, 'black', 'pawn', r, 7);
+        addPiece(gs, 'black', 'pawn', r, 10);
+    }
 };
 
 const addPiece = (gs: GameState, color: Color, type: PieceType, ring: number, file: number) => {
