@@ -1,5 +1,5 @@
 import { FILES, RINGS } from '../types';
-import type { Bitboard } from '../types';
+import type { Bitboard, GameMode } from '../types';
 import { toCoord, toIndex, normalizeFile } from '../topology';
 import { setBit } from '../bitboard';
 
@@ -38,7 +38,7 @@ const initRookAttacks = () => {
 // Initialize once
 initRookAttacks();
 
-export const getRookAttacks = (square: number, occupancy: Bitboard): Bitboard => {
+export const getRookAttacks = (square: number, occupancy: Bitboard, mode: GameMode = 'standard'): Bitboard => {
     // Simplified for now: doesn't account for blocking pieces yet.
     // Full implementation needs magic bitboards or similar for blocking.
     // For Shatranj/Circular, blocking is standard.
@@ -73,18 +73,33 @@ export const getRookAttacks = (square: number, occupancy: Bitboard): Bitboard =>
         if ((occupancy & (1n << BigInt(target))) !== 0n) break;
     }
 
-    // Inward
-    for (let r = ring - 1; r >= 0; r--) {
-        const target = toIndex(r, file);
-        attacks = setBit(attacks, target);
-        if ((occupancy & (1n << BigInt(target))) !== 0n) break;
-    }
-
-    // Outward
-    for (let r = ring + 1; r < RINGS; r++) {
-        const target = toIndex(r, file);
-        attacks = setBit(attacks, target);
-        if ((occupancy & (1n << BigInt(target))) !== 0n) break;
+    // Inward/Outward - reversed in citadel mode
+    if (mode === 'citadel') {
+        // Outward (toward center in reversed mode)
+        for (let r = ring - 1; r >= 0; r--) {
+            const target = toIndex(r, file);
+            attacks = setBit(attacks, target);
+            if ((occupancy & (1n << BigInt(target))) !== 0n) break;
+        }
+        // Inward (away from center in reversed mode)
+        for (let r = ring + 1; r < RINGS; r++) {
+            const target = toIndex(r, file);
+            attacks = setBit(attacks, target);
+            if ((occupancy & (1n << BigInt(target))) !== 0n) break;
+        }
+    } else {
+        // Inward
+        for (let r = ring - 1; r >= 0; r--) {
+            const target = toIndex(r, file);
+            attacks = setBit(attacks, target);
+            if ((occupancy & (1n << BigInt(target))) !== 0n) break;
+        }
+        // Outward
+        for (let r = ring + 1; r < RINGS; r++) {
+            const target = toIndex(r, file);
+            attacks = setBit(attacks, target);
+            if ((occupancy & (1n << BigInt(target))) !== 0n) break;
+        }
     }
 
     return attacks;

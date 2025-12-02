@@ -1,6 +1,6 @@
 import { FILES, RINGS } from '../types';
-import type { Bitboard } from '../types';
-import { toIndex, normalizeFile, isValidRing } from '../topology';
+import type { Bitboard, GameMode } from '../types';
+import { toIndex, normalizeFile, isValidRing, toCoord } from '../topology';
 import { setBit } from '../bitboard';
 
 const knightAttacks: Bitboard[] = new Array(RINGS * FILES).fill(0n);
@@ -34,6 +34,25 @@ const initKnightAttacks = () => {
 
 initKnightAttacks();
 
-export const getKnightAttacks = (square: number): Bitboard => {
+export const getKnightAttacks = (square: number, mode: GameMode = 'standard'): Bitboard => {
+    // In citadel mode, reverse radial direction
+    if (mode === 'citadel') {
+        const { ring, file } = toCoord(square);
+        let attacks = 0n;
+        const offsets = [
+            { dr: -1, df: 2 }, { dr: -1, df: -2 }, // Reversed radial
+            { dr: 1, df: 2 }, { dr: 1, df: -2 }, // Reversed radial
+            { dr: -2, df: 1 }, { dr: -2, df: -1 }, // Reversed radial
+            { dr: 2, df: 1 }, { dr: 2, df: -1 }, // Reversed radial
+        ];
+        for (const { dr, df } of offsets) {
+            const nr = ring + dr;
+            const nf = normalizeFile(file + df);
+            if (isValidRing(nr)) {
+                attacks = setBit(attacks, toIndex(nr, nf));
+            }
+        }
+        return attacks;
+    }
     return knightAttacks[square];
 };

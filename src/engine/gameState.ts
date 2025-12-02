@@ -1,12 +1,14 @@
 import { TOTAL_SQUARES } from './types';
-import type { Color, GameState, PieceType } from './types';
+import type { Color, GameState, GameMode, PieceType } from './types';
 import { setBit, clearBit } from './bitboard';
 import { toIndex } from './topology';
 
-export const createEmptyGameState = (): GameState => {
+export const createEmptyGameState = (mode: GameMode = 'standard'): GameState => {
     return {
         board: new Array(TOTAL_SQUARES).fill(null),
         turn: 'white',
+        mode,
+        citadelSquares: 0n,
         pieces: {
             white: { pawn: 0n, rook: 0n, knight: 0n, bishop: 0n, queen: 0n, king: 0n },
             black: { pawn: 0n, rook: 0n, knight: 0n, bishop: 0n, queen: 0n, king: 0n },
@@ -60,45 +62,150 @@ export const createEmptyGameState = (): GameState => {
 
 export const setupStandardBoard = (gs: GameState): void => {
     // Byzantine / Circular Chess Setup
-    // White occupies Files 15, 0, 1, 2
-    // Black occupies Files 7, 8, 9, 10
+    // White occupies Files 14, 15, 0, 1 (rotated counterclockwise)
+    // Black occupies Files 6, 7, 8, 9 (rotated counterclockwise)
 
-    // White Pieces (Files 0, 1)
-    // File 0: King (Inner) -> Rook (Outer)
-    addPiece(gs, 'white', 'king', 0, 0);
+    // White Pieces (Files 15, 0)
+    // File 15: King (Inner) -> Rook (Outer)
+    addPiece(gs, 'white', 'king', 0, 15);
+    addPiece(gs, 'white', 'bishop', 1, 15);
+    addPiece(gs, 'white', 'knight', 2, 15);
+    addPiece(gs, 'white', 'rook', 3, 15);
+
+    // File 0: Queen (Inner) -> Rook (Outer)
+    addPiece(gs, 'white', 'queen', 0, 0);
     addPiece(gs, 'white', 'bishop', 1, 0);
     addPiece(gs, 'white', 'knight', 2, 0);
     addPiece(gs, 'white', 'rook', 3, 0);
 
-    // File 1: Queen (Inner) -> Rook (Outer)
-    addPiece(gs, 'white', 'queen', 0, 1);
-    addPiece(gs, 'white', 'bishop', 1, 1);
-    addPiece(gs, 'white', 'knight', 2, 1);
-    addPiece(gs, 'white', 'rook', 3, 1);
-
-    // White Pawns (Files 15, 2 - Flanking)
+    // White Pawns (Files 14, 1 - Flanking)
     for (let r = 0; r < 4; r++) {
-        addPiece(gs, 'white', 'pawn', r, 15);
-        addPiece(gs, 'white', 'pawn', r, 2);
+        addPiece(gs, 'white', 'pawn', r, 14);
+        addPiece(gs, 'white', 'pawn', r, 1);
     }
 
-    // Black Pieces (Files 8, 9)
-    // File 8: King (Inner) -> Rook (Outer) - Facing White King
-    addPiece(gs, 'black', 'king', 0, 8);
+    // Black Pieces (Files 7, 8)
+    // File 7: King (Inner) -> Rook (Outer) - Facing White King
+    addPiece(gs, 'black', 'king', 0, 7);
+    addPiece(gs, 'black', 'bishop', 1, 7);
+    addPiece(gs, 'black', 'knight', 2, 7);
+    addPiece(gs, 'black', 'rook', 3, 7);
+
+    // File 8: Queen (Inner) -> Rook (Outer)
+    addPiece(gs, 'black', 'queen', 0, 8);
     addPiece(gs, 'black', 'bishop', 1, 8);
     addPiece(gs, 'black', 'knight', 2, 8);
     addPiece(gs, 'black', 'rook', 3, 8);
 
-    // File 9: Queen (Inner) -> Rook (Outer)
-    addPiece(gs, 'black', 'queen', 0, 9);
-    addPiece(gs, 'black', 'bishop', 1, 9);
-    addPiece(gs, 'black', 'knight', 2, 9);
-    addPiece(gs, 'black', 'rook', 3, 9);
-
-    // Black Pawns (Files 7, 10 - Flanking)
+    // Black Pawns (Files 6, 9 - Flanking)
     for (let r = 0; r < 4; r++) {
-        addPiece(gs, 'black', 'pawn', r, 7);
-        addPiece(gs, 'black', 'pawn', r, 10);
+        addPiece(gs, 'black', 'pawn', r, 6);
+        addPiece(gs, 'black', 'pawn', r, 9);
+    }
+};
+
+// Modern Circular Chess Setup
+// Directly copied from shatranj starting positions
+export const setupModernBoard = (gs: GameState): void => {
+    // Byzantine / Circular Chess Setup
+    // White occupies Files 14, 15, 0, 1 (rotated counterclockwise)
+    // Black occupies Files 6, 7, 8, 9 (rotated counterclockwise)
+
+    // White Pieces (Files 15, 0)
+    // File 15: King (Inner) -> Rook (Outer)
+    addPiece(gs, 'white', 'king', 0, 15);
+    addPiece(gs, 'white', 'bishop', 1, 15);
+    addPiece(gs, 'white', 'knight', 2, 15);
+    addPiece(gs, 'white', 'rook', 3, 15);
+
+    // File 0: Queen (Inner) -> Rook (Outer)
+    addPiece(gs, 'white', 'queen', 0, 0);
+    addPiece(gs, 'white', 'bishop', 1, 0);
+    addPiece(gs, 'white', 'knight', 2, 0);
+    addPiece(gs, 'white', 'rook', 3, 0);
+
+    // White Pawns (Files 14, 1 - Flanking)
+    for (let r = 0; r < 4; r++) {
+        addPiece(gs, 'white', 'pawn', r, 14);
+        addPiece(gs, 'white', 'pawn', r, 1);
+    }
+
+    // Black Pieces (Files 7, 8)
+    // File 7: King (Inner) -> Rook (Outer) - Facing White King
+    addPiece(gs, 'black', 'king', 0, 7);
+    addPiece(gs, 'black', 'bishop', 1, 7);
+    addPiece(gs, 'black', 'knight', 2, 7);
+    addPiece(gs, 'black', 'rook', 3, 7);
+
+    // File 8: Queen (Inner) -> Rook (Outer)
+    addPiece(gs, 'black', 'queen', 0, 8);
+    addPiece(gs, 'black', 'bishop', 1, 8);
+    addPiece(gs, 'black', 'knight', 2, 8);
+    addPiece(gs, 'black', 'rook', 3, 8);
+
+    // Black Pawns (Files 6, 9 - Flanking)
+    for (let r = 0; r < 4; r++) {
+        addPiece(gs, 'black', 'pawn', r, 6);
+        addPiece(gs, 'black', 'pawn', r, 9);
+    }
+};
+
+// Citadel Chess Setup
+// Based on historical circular chess variant with citadel spaces in the center circle
+// Citadels are now in the center circle (striped quarters), not on ring 0
+// Ring 0 squares are all normal playable squares
+export const setupCitadelBoard = (gs: GameState): void => {
+    // Citadel squares are now in the center circle, not on ring 0
+    // No ring 0 squares are marked as citadel anymore
+
+    // Citadel chess has a reversed starting setup from shatranj
+    // King is at the farthest radius (outermost ring, ring 3)
+    // Pieces are arranged in reverse order: Rooks innermost, then knights, bishops, queen, king outermost
+
+    // White side (Files 15, 0, 1, 2) - rotated counterclockwise
+    // Ring 0 (innermost): Rooks
+    addPiece(gs, 'white', 'rook', 0, 15);
+    addPiece(gs, 'white', 'rook', 0, 0);
+    
+    // Ring 1: Knights
+    addPiece(gs, 'white', 'knight', 1, 15);
+    addPiece(gs, 'white', 'knight', 1, 0);
+    
+    // Ring 2: Bishops
+    addPiece(gs, 'white', 'bishop', 2, 15);
+    addPiece(gs, 'white', 'bishop', 2, 0);
+    
+    // Ring 3 (outermost): King and Queen
+    addPiece(gs, 'white', 'king', 3, 15);
+    addPiece(gs, 'white', 'queen', 3, 0);
+    
+    // Pawns flanking (Files 14, 1)
+    for (let r = 0; r < 4; r++) {
+        addPiece(gs, 'white', 'pawn', r, 14);
+        addPiece(gs, 'white', 'pawn', r, 1);
+    }
+
+    // Black side (Files 7, 8, 9, 10) - opposite side, rotated counterclockwise
+    // Ring 0 (innermost): Rooks
+    addPiece(gs, 'black', 'rook', 0, 7);
+    addPiece(gs, 'black', 'rook', 0, 8);
+    
+    // Ring 1: Knights
+    addPiece(gs, 'black', 'knight', 1, 7);
+    addPiece(gs, 'black', 'knight', 1, 8);
+    
+    // Ring 2: Bishops
+    addPiece(gs, 'black', 'bishop', 2, 7);
+    addPiece(gs, 'black', 'bishop', 2, 8);
+    
+    // Ring 3 (outermost): King and Queen
+    addPiece(gs, 'black', 'king', 3, 7);
+    addPiece(gs, 'black', 'queen', 3, 8);
+    
+    // Pawns flanking (Files 6, 9)
+    for (let r = 0; r < 4; r++) {
+        addPiece(gs, 'black', 'pawn', r, 6);
+        addPiece(gs, 'black', 'pawn', r, 9);
     }
 };
 
@@ -112,9 +219,15 @@ const addPiece = (gs: GameState, color: Color, type: PieceType, ring: number, fi
     gs.allOccupancy = setBit(gs.allOccupancy, sq);
 };
 
-export const initialGameState = (): GameState => {
-    const gs = createEmptyGameState();
-    setupStandardBoard(gs);
+export const initialGameState = (mode: GameMode = 'standard'): GameState => {
+    const gs = createEmptyGameState(mode);
+    if (mode === 'citadel') {
+        setupCitadelBoard(gs);
+    } else if (mode === 'modern') {
+        setupModernBoard(gs);
+    } else {
+        setupStandardBoard(gs);
+    }
     return gs;
 };
 
@@ -128,6 +241,9 @@ export const makeMove = (gameState: GameState, from: number, to: number): GameSt
     const newGameState: GameState = {
         board: [...gameState.board],
         turn: gameState.turn === 'white' ? 'black' : 'white',
+        mode: gameState.mode,
+        citadelSquares: gameState.citadelSquares,
+        isDraw: gameState.isDraw,
         pieces: {
             white: { ...gameState.pieces.white },
             black: { ...gameState.pieces.black },
@@ -164,6 +280,8 @@ export const makeMove = (gameState: GameState, from: number, to: number): GameSt
 
     // Update all occupancy
     newGameState.allOccupancy = newGameState.occupancy.white | newGameState.occupancy.black;
+
+    // Note: In citadel mode, kings cannot move to citadel squares (blocked in move generation)
 
     return newGameState;
 };
