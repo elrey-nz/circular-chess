@@ -1,22 +1,22 @@
 import { useState } from 'react';
 import CircularBoard from './components/CircularBoard';
 import SettingsDropdown from './components/SettingsDropdown';
-import { initialGameState, makeMove } from './engine/gameState';
+import { GameState } from './engine/GameState';
 import type { GameMode } from './engine/types';
 import type { BoardThemeName } from './types/boardTheme';
 
 function App() {
   const [gameMode, setGameMode] = useState<GameMode>('standard');
-  const [gameState, setGameState] = useState(initialGameState(gameMode));
+  const [gameState, setGameState] = useState(GameState.initial(gameMode));
   const [boardTheme, setBoardTheme] = useState<BoardThemeName>('dark');
 
   const handleModeChange = (mode: GameMode) => {
     setGameMode(mode);
-    setGameState(initialGameState(mode));
+    setGameState(GameState.initial(mode));
   };
 
   const handleMove = (from: number, to: number) => {
-    const newGameState = makeMove(gameState, from, to);
+    const newGameState = gameState.makeMoveFromIndices(from, to);
     setGameState(newGameState);
   };
 
@@ -43,31 +43,28 @@ function App() {
           <div className="flex gap-2 items-center">
             <button
               onClick={() => handleModeChange('standard')}
-              className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                gameMode === 'standard'
+              className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${gameMode === 'standard'
                   ? 'bg-neutral-700 text-white'
                   : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
-              }`}
+                }`}
             >
               Shatranj
             </button>
             <button
               onClick={() => handleModeChange('modern')}
-              className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                gameMode === 'modern'
+              className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${gameMode === 'modern'
                   ? 'bg-neutral-700 text-white'
                   : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
-              }`}
+                }`}
             >
               Modern
             </button>
             <button
               onClick={() => handleModeChange('citadel')}
-              className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                gameMode === 'citadel'
+              className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${gameMode === 'citadel'
                   ? 'bg-neutral-700 text-white'
                   : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
-              }`}
+                }`}
             >
               Citadel
             </button>
@@ -84,7 +81,7 @@ function App() {
           <SettingsDropdown currentTheme={boardTheme} onThemeChange={setBoardTheme} />
         </div>
       </div>
-      
+
       {/* Board container - fills remaining space */}
       <div className="flex-1 flex items-center justify-center p-4 min-h-0">
         <div className="w-full h-full max-w-full max-h-full aspect-square">

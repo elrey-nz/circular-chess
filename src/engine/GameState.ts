@@ -1,287 +1,276 @@
-import { TOTAL_SQUARES } from './types';
-import type { Color, GameState, GameMode, PieceType } from './types';
-import { setBit, clearBit } from './bitboard';
-import { toIndex } from './topology';
+import { Board } from './Board';
+import { Bitboard } from './Bitboard';
+import { Coordinate } from './Coordinate';
+import type { Color, GameMode } from './types';
+import { createPiece } from './pieces';
 
-export const createEmptyGameState = (mode: GameMode = 'standard'): GameState => {
-    return {
-        board: new Array(TOTAL_SQUARES).fill(null),
-        turn: 'white',
-        mode,
-        citadelSquares: 0n,
-        pieces: {
-            white: { pawn: 0n, rook: 0n, knight: 0n, bishop: 0n, queen: 0n, king: 0n },
-            black: { pawn: 0n, rook: 0n, knight: 0n, bishop: 0n, queen: 0n, king: 0n },
-        },
-        occupancy: { white: 0n, black: 0n },
-        allOccupancy: 0n,
-    };
-};
+/**
+ * GameState class manages the entire game state including board, turn, mode, and citadel squares.
+ * All operations return new GameState instances (immutable).
+ */
+export class GameState {
+    readonly board: Board;
+    readonly turn: Color;
+    readonly mode: GameMode;
+    readonly citadelSquares: Bitboard;
+    readonly isDraw?: boolean;
 
-// Standard Circular Chess / Shatranj setup (approximate, needs verification of exact standard)
-// Assuming:
-// Ring 0 (innermost): Empty? Or main pieces?
-// Ring 3 (outermost): Pawns?
-// Need a definitive setup. KIs didn't specify.
-// Common circular: 4 rings.
-// Outer ring (3): White Pawns?
-// Ring 2: White Pieces?
-// Ring 1: Black Pieces?
-// Inner ring (0): Black Pawns?
-// OR split by halves.
-// Let's assume split by halves for now as it's common for 4x16.
-// Files 0-7: White side? Files 8-15: Black side?
-// Actually, 4 rings, 16 files.
-// Usually it's two opposite sides.
-// White at files 0,1, 14,15?
-// Let's go with a simple symmetric setup for now and refine later.
-// White on Ring 0, Files 0-7? No, that's a quarter.
-// Let's try: White on Rings 0 & 1, Black on Rings 2 & 3?
-// No, they need to meet.
-// Standard is often:
-// White pieces on Ring 0, Files 4-11. Pawns on Ring 1, Files 4-11.
-// Black pieces on Ring 3, Files 4-11. Pawns on Ring 2, Files 4-11.
-// Wait, 16 files.
-// Let's use a setup where they face each other across the center?
-// Or face each other along the files?
-// "Unfurled version of the board" -> sounds like standard 8x8 bent into a cylinder.
-// If 4 rings x 16 files = 64 squares.
-// It's exactly an 8x8 board.
-// Maybe it's just standard chess wrapped?
-// If so, Ring = Rank, File = File.
-// Ranks 0-7, Files 0-7.
-// Wrapping files means File 0 is next to File 7?
-// 4x16 is different.
-// Let's stick to 4 rings, 16 files.
-// Setup:
-// White Rooks at (0,0), (0,15)?
-// Let's place them opposite.
-// White at Files 0-3?
-// Need user input on exact setup if standard isn't clear.
-// For now, implementing a placeholder setup.
-
-export const setupStandardBoard = (gs: GameState): void => {
-    // Byzantine / Circular Chess Setup
-    // White occupies Files 14, 15, 0, 1 (rotated counterclockwise)
-    // Black occupies Files 6, 7, 8, 9 (rotated counterclockwise)
-
-    // White Pieces (Files 15, 0)
-    // File 15: King (Inner) -> Rook (Outer)
-    addPiece(gs, 'white', 'king', 0, 15);
-    addPiece(gs, 'white', 'bishop', 1, 15);
-    addPiece(gs, 'white', 'knight', 2, 15);
-    addPiece(gs, 'white', 'rook', 3, 15);
-
-    // File 0: Queen (Inner) -> Rook (Outer)
-    addPiece(gs, 'white', 'queen', 0, 0);
-    addPiece(gs, 'white', 'bishop', 1, 0);
-    addPiece(gs, 'white', 'knight', 2, 0);
-    addPiece(gs, 'white', 'rook', 3, 0);
-
-    // White Pawns (Files 14, 1 - Flanking)
-    for (let r = 0; r < 4; r++) {
-        addPiece(gs, 'white', 'pawn', r, 14);
-        addPiece(gs, 'white', 'pawn', r, 1);
+    constructor(
+        board: Board,
+        turn: Color = 'white',
+        mode: GameMode = 'standard',
+        citadelSquares: Bitboard = Bitboard.empty(),
+        isDraw?: boolean
+    ) {
+        this.board = board;
+        this.turn = turn;
+        this.mode = mode;
+        this.citadelSquares = citadelSquares;
+        this.isDraw = isDraw;
     }
 
-    // Black Pieces (Files 7, 8)
-    // File 7: King (Inner) -> Rook (Outer) - Facing White King
-    addPiece(gs, 'black', 'king', 0, 7);
-    addPiece(gs, 'black', 'bishop', 1, 7);
-    addPiece(gs, 'black', 'knight', 2, 7);
-    addPiece(gs, 'black', 'rook', 3, 7);
-
-    // File 8: Queen (Inner) -> Rook (Outer)
-    addPiece(gs, 'black', 'queen', 0, 8);
-    addPiece(gs, 'black', 'bishop', 1, 8);
-    addPiece(gs, 'black', 'knight', 2, 8);
-    addPiece(gs, 'black', 'rook', 3, 8);
-
-    // Black Pawns (Files 6, 9 - Flanking)
-    for (let r = 0; r < 4; r++) {
-        addPiece(gs, 'black', 'pawn', r, 6);
-        addPiece(gs, 'black', 'pawn', r, 9);
-    }
-};
-
-// Modern Circular Chess Setup
-// Directly copied from shatranj starting positions
-export const setupModernBoard = (gs: GameState): void => {
-    // Byzantine / Circular Chess Setup
-    // White occupies Files 14, 15, 0, 1 (rotated counterclockwise)
-    // Black occupies Files 6, 7, 8, 9 (rotated counterclockwise)
-
-    // White Pieces (Files 15, 0)
-    // File 15: King (Inner) -> Rook (Outer)
-    addPiece(gs, 'white', 'king', 0, 15);
-    addPiece(gs, 'white', 'bishop', 1, 15);
-    addPiece(gs, 'white', 'knight', 2, 15);
-    addPiece(gs, 'white', 'rook', 3, 15);
-
-    // File 0: Queen (Inner) -> Rook (Outer)
-    addPiece(gs, 'white', 'queen', 0, 0);
-    addPiece(gs, 'white', 'bishop', 1, 0);
-    addPiece(gs, 'white', 'knight', 2, 0);
-    addPiece(gs, 'white', 'rook', 3, 0);
-
-    // White Pawns (Files 14, 1 - Flanking)
-    for (let r = 0; r < 4; r++) {
-        addPiece(gs, 'white', 'pawn', r, 14);
-        addPiece(gs, 'white', 'pawn', r, 1);
+    /**
+     * Create an empty game state
+     */
+    static createEmpty(mode: GameMode = 'standard'): GameState {
+        const board = new Board();
+        return new GameState(board, 'white', mode, Bitboard.empty());
     }
 
-    // Black Pieces (Files 7, 8)
-    // File 7: King (Inner) -> Rook (Outer) - Facing White King
-    addPiece(gs, 'black', 'king', 0, 7);
-    addPiece(gs, 'black', 'bishop', 1, 7);
-    addPiece(gs, 'black', 'knight', 2, 7);
-    addPiece(gs, 'black', 'rook', 3, 7);
-
-    // File 8: Queen (Inner) -> Rook (Outer)
-    addPiece(gs, 'black', 'queen', 0, 8);
-    addPiece(gs, 'black', 'bishop', 1, 8);
-    addPiece(gs, 'black', 'knight', 2, 8);
-    addPiece(gs, 'black', 'rook', 3, 8);
-
-    // Black Pawns (Files 6, 9 - Flanking)
-    for (let r = 0; r < 4; r++) {
-        addPiece(gs, 'black', 'pawn', r, 6);
-        addPiece(gs, 'black', 'pawn', r, 9);
-    }
-};
-
-// Citadel Chess Setup
-// Based on historical circular chess variant with citadel spaces in the center circle
-// Citadels are now in the center circle (striped quarters), not on ring 0
-// Ring 0 squares are all normal playable squares
-export const setupCitadelBoard = (gs: GameState): void => {
-    // Citadel squares are now in the center circle, not on ring 0
-    // No ring 0 squares are marked as citadel anymore
-
-    // Citadel chess has a reversed starting setup from shatranj
-    // King is at the farthest radius (outermost ring, ring 3)
-    // Pieces are arranged in reverse order: Rooks innermost, then knights, bishops, queen, king outermost
-
-    // White side (Files 15, 0, 1, 2) - rotated counterclockwise
-    // Ring 0 (innermost): Rooks
-    addPiece(gs, 'white', 'rook', 0, 15);
-    addPiece(gs, 'white', 'rook', 0, 0);
-    
-    // Ring 1: Knights
-    addPiece(gs, 'white', 'knight', 1, 15);
-    addPiece(gs, 'white', 'knight', 1, 0);
-    
-    // Ring 2: Bishops
-    addPiece(gs, 'white', 'bishop', 2, 15);
-    addPiece(gs, 'white', 'bishop', 2, 0);
-    
-    // Ring 3 (outermost): King and Queen
-    addPiece(gs, 'white', 'king', 3, 15);
-    addPiece(gs, 'white', 'queen', 3, 0);
-    
-    // Pawns flanking (Files 14, 1)
-    for (let r = 0; r < 4; r++) {
-        addPiece(gs, 'white', 'pawn', r, 14);
-        addPiece(gs, 'white', 'pawn', r, 1);
+    /**
+     * Create a game state with standard board setup
+     */
+    static setupStandard(mode: GameMode = 'standard'): GameState {
+        const gs = GameState.createEmpty(mode);
+        return gs.setupStandardBoard();
     }
 
-    // Black side (Files 7, 8, 9, 10) - opposite side, rotated counterclockwise
-    // Ring 0 (innermost): Rooks
-    addPiece(gs, 'black', 'rook', 0, 7);
-    addPiece(gs, 'black', 'rook', 0, 8);
-    
-    // Ring 1: Knights
-    addPiece(gs, 'black', 'knight', 1, 7);
-    addPiece(gs, 'black', 'knight', 1, 8);
-    
-    // Ring 2: Bishops
-    addPiece(gs, 'black', 'bishop', 2, 7);
-    addPiece(gs, 'black', 'bishop', 2, 8);
-    
-    // Ring 3 (outermost): King and Queen
-    addPiece(gs, 'black', 'king', 3, 7);
-    addPiece(gs, 'black', 'queen', 3, 8);
-    
-    // Pawns flanking (Files 6, 9)
-    for (let r = 0; r < 4; r++) {
-        addPiece(gs, 'black', 'pawn', r, 6);
-        addPiece(gs, 'black', 'pawn', r, 9);
-    }
-};
-
-const addPiece = (gs: GameState, color: Color, type: PieceType, ring: number, file: number) => {
-    const sq = toIndex(ring, file);
-    if (sq === -1) return;
-
-    gs.board[sq] = { color, type };
-    gs.pieces[color][type] = setBit(gs.pieces[color][type], sq);
-    gs.occupancy[color] = setBit(gs.occupancy[color], sq);
-    gs.allOccupancy = setBit(gs.allOccupancy, sq);
-};
-
-export const initialGameState = (mode: GameMode = 'standard'): GameState => {
-    const gs = createEmptyGameState(mode);
-    if (mode === 'citadel') {
-        setupCitadelBoard(gs);
-    } else if (mode === 'modern') {
-        setupModernBoard(gs);
-    } else {
-        setupStandardBoard(gs);
-    }
-    return gs;
-};
-
-export const makeMove = (gameState: GameState, from: number, to: number): GameState => {
-    // Deep copy game state (simplest for React state immutability, though slow for engine)
-    // For a real engine, we'd use undo-move, but for React app, copying is safer.
-    // JSON.parse/stringify is slow but easy for deep copy of simple objects.
-    // Bitints need special handling if we use JSON.
-    // Better to manual copy or use a library, but let's try manual for critical parts.
-
-    const newGameState: GameState = {
-        board: [...gameState.board],
-        turn: gameState.turn === 'white' ? 'black' : 'white',
-        mode: gameState.mode,
-        citadelSquares: gameState.citadelSquares,
-        isDraw: gameState.isDraw,
-        pieces: {
-            white: { ...gameState.pieces.white },
-            black: { ...gameState.pieces.black },
-        },
-        occupancy: {
-            white: gameState.occupancy.white,
-            black: gameState.occupancy.black,
-        },
-        allOccupancy: gameState.allOccupancy,
-    };
-
-    const movingPiece = newGameState.board[from];
-    if (!movingPiece) return gameState; // Should not happen if move is legal
-
-    // Handle capture
-    const targetPiece = newGameState.board[to];
-    if (targetPiece) {
-        newGameState.pieces[targetPiece.color][targetPiece.type] = clearBit(newGameState.pieces[targetPiece.color][targetPiece.type], to);
-        newGameState.occupancy[targetPiece.color] = clearBit(newGameState.occupancy[targetPiece.color], to);
+    /**
+     * Create a game state with modern board setup
+     */
+    static setupModern(mode: GameMode = 'modern'): GameState {
+        const gs = GameState.createEmpty(mode);
+        return gs.setupModernBoard();
     }
 
-    // Move piece
-    newGameState.board[to] = movingPiece;
-    newGameState.board[from] = null;
+    /**
+     * Create a game state with citadel board setup
+     */
+    static setupCitadel(): GameState {
+        const gs = GameState.createEmpty('citadel');
+        return gs.setupCitadelBoard();
+    }
 
-    const color = movingPiece.color;
-    const type = movingPiece.type;
+    /**
+     * Create initial game state based on mode
+     */
+    static initial(mode: GameMode = 'standard'): GameState {
+        if (mode === 'citadel') {
+            return GameState.setupCitadel();
+        } else if (mode === 'modern') {
+            return GameState.setupModern(mode);
+        } else {
+            return GameState.setupStandard(mode);
+        }
+    }
 
-    // Update bitboards for moving piece
-    newGameState.pieces[color][type] = clearBit(newGameState.pieces[color][type], from);
-    newGameState.pieces[color][type] = setBit(newGameState.pieces[color][type], to);
-    newGameState.occupancy[color] = clearBit(newGameState.occupancy[color], from);
-    newGameState.occupancy[color] = setBit(newGameState.occupancy[color], to);
+    /**
+     * Setup standard board (Byzantine / Circular Chess Setup)
+     */
+    private setupStandardBoard(): GameState {
+        const newBoard = this.board.clone();
 
-    // Update all occupancy
-    newGameState.allOccupancy = newGameState.occupancy.white | newGameState.occupancy.black;
+        // White Pieces (Files 15, 0)
+        // File 15: King (Inner) -> Rook (Outer)
+        newBoard.setPiece(new Coordinate(0, 15), createPiece('white', 'king'));
+        newBoard.setPiece(new Coordinate(1, 15), createPiece('white', 'bishop'));
+        newBoard.setPiece(new Coordinate(2, 15), createPiece('white', 'knight'));
+        newBoard.setPiece(new Coordinate(3, 15), createPiece('white', 'rook'));
 
-    // Note: In citadel mode, kings cannot move to citadel squares (blocked in move generation)
+        // File 0: Queen (Inner) -> Rook (Outer)
+        newBoard.setPiece(new Coordinate(0, 0), createPiece('white', 'queen'));
+        newBoard.setPiece(new Coordinate(1, 0), createPiece('white', 'bishop'));
+        newBoard.setPiece(new Coordinate(2, 0), createPiece('white', 'knight'));
+        newBoard.setPiece(new Coordinate(3, 0), createPiece('white', 'rook'));
 
-    return newGameState;
-};
+        // White Pawns (Files 14, 1 - Flanking)
+        for (let r = 0; r < 4; r++) {
+            newBoard.setPiece(new Coordinate(r, 14), createPiece('white', 'pawn'));
+            newBoard.setPiece(new Coordinate(r, 1), createPiece('white', 'pawn'));
+        }
+
+        // Black Pieces (Files 7, 8)
+        // File 7: King (Inner) -> Rook (Outer) - Facing White King
+        newBoard.setPiece(new Coordinate(0, 7), createPiece('black', 'king'));
+        newBoard.setPiece(new Coordinate(1, 7), createPiece('black', 'bishop'));
+        newBoard.setPiece(new Coordinate(2, 7), createPiece('black', 'knight'));
+        newBoard.setPiece(new Coordinate(3, 7), createPiece('black', 'rook'));
+
+        // File 8: Queen (Inner) -> Rook (Outer)
+        newBoard.setPiece(new Coordinate(0, 8), createPiece('black', 'queen'));
+        newBoard.setPiece(new Coordinate(1, 8), createPiece('black', 'bishop'));
+        newBoard.setPiece(new Coordinate(2, 8), createPiece('black', 'knight'));
+        newBoard.setPiece(new Coordinate(3, 8), createPiece('black', 'rook'));
+
+        // Black Pawns (Files 6, 9 - Flanking)
+        for (let r = 0; r < 4; r++) {
+            newBoard.setPiece(new Coordinate(r, 6), createPiece('black', 'pawn'));
+            newBoard.setPiece(new Coordinate(r, 9), createPiece('black', 'pawn'));
+        }
+
+        return new GameState(newBoard, this.turn, this.mode, this.citadelSquares, this.isDraw);
+    }
+
+    /**
+     * Setup modern board (same as standard for now)
+     */
+    private setupModernBoard(): GameState {
+        // Modern is the same as standard for now
+        return this.setupStandardBoard();
+    }
+
+    /**
+     * Setup citadel board
+     */
+    private setupCitadelBoard(): GameState {
+        const newBoard = this.board.clone();
+
+        // White side (Files 15, 0, 1, 2) - rotated counterclockwise
+        // Ring 0 (innermost): Rooks
+        newBoard.setPiece(new Coordinate(0, 15), createPiece('white', 'rook'));
+        newBoard.setPiece(new Coordinate(0, 0), createPiece('white', 'rook'));
+
+        // Ring 1: Knights
+        newBoard.setPiece(new Coordinate(1, 15), createPiece('white', 'knight'));
+        newBoard.setPiece(new Coordinate(1, 0), createPiece('white', 'knight'));
+
+        // Ring 2: Bishops
+        newBoard.setPiece(new Coordinate(2, 15), createPiece('white', 'bishop'));
+        newBoard.setPiece(new Coordinate(2, 0), createPiece('white', 'bishop'));
+
+        // Ring 3 (outermost): King and Queen
+        newBoard.setPiece(new Coordinate(3, 15), createPiece('white', 'king'));
+        newBoard.setPiece(new Coordinate(3, 0), createPiece('white', 'queen'));
+
+        // Pawns flanking (Files 14, 1)
+        for (let r = 0; r < 4; r++) {
+            newBoard.setPiece(new Coordinate(r, 14), createPiece('white', 'pawn'));
+            newBoard.setPiece(new Coordinate(r, 1), createPiece('white', 'pawn'));
+        }
+
+        // Black side (Files 7, 8, 9, 10) - opposite side, rotated counterclockwise
+        // Ring 0 (innermost): Rooks
+        newBoard.setPiece(new Coordinate(0, 7), createPiece('black', 'rook'));
+        newBoard.setPiece(new Coordinate(0, 8), createPiece('black', 'rook'));
+
+        // Ring 1: Knights
+        newBoard.setPiece(new Coordinate(1, 7), createPiece('black', 'knight'));
+        newBoard.setPiece(new Coordinate(1, 8), createPiece('black', 'knight'));
+
+        // Ring 2: Bishops
+        newBoard.setPiece(new Coordinate(2, 7), createPiece('black', 'bishop'));
+        newBoard.setPiece(new Coordinate(2, 8), createPiece('black', 'bishop'));
+
+        // Ring 3 (outermost): King and Queen
+        newBoard.setPiece(new Coordinate(3, 7), createPiece('black', 'king'));
+        newBoard.setPiece(new Coordinate(3, 8), createPiece('black', 'queen'));
+
+        // Pawns flanking (Files 6, 9)
+        for (let r = 0; r < 4; r++) {
+            newBoard.setPiece(new Coordinate(r, 6), createPiece('black', 'pawn'));
+            newBoard.setPiece(new Coordinate(r, 9), createPiece('black', 'pawn'));
+        }
+
+        return new GameState(newBoard, this.turn, this.mode, this.citadelSquares, this.isDraw);
+    }
+
+    /**
+     * Make a move from one coordinate to another, returning a new GameState
+     */
+    makeMove(from: Coordinate, to: Coordinate): GameState {
+        const movingPiece = this.board.getPiece(from);
+        if (!movingPiece || movingPiece.color !== this.turn) {
+            return this; // Invalid move, return unchanged
+        }
+
+        const newBoard = this.board.clone();
+
+        // Handle capture
+        const targetPiece = newBoard.getPiece(to);
+        if (targetPiece) {
+            newBoard.removePiece(to);
+        }
+
+        // Move piece
+        newBoard.removePiece(from);
+        newBoard.setPiece(to, movingPiece);
+
+        // Switch turn
+        const newTurn: Color = this.turn === 'white' ? 'black' : 'white';
+
+        return new GameState(newBoard, newTurn, this.mode, this.citadelSquares, this.isDraw);
+    }
+
+    /**
+     * Make a move from indices (for backward compatibility)
+     */
+    makeMoveFromIndices(fromIndex: number, toIndex: number): GameState {
+        const from = Coordinate.fromIndex(fromIndex);
+        const to = Coordinate.fromIndex(toIndex);
+        return this.makeMove(from, to);
+    }
+
+    /**
+     * Get the current player's color
+     */
+    getCurrentPlayer(): Color {
+        return this.turn;
+    }
+
+    /**
+     * Switch turn (returns new GameState)
+     */
+    switchTurn(): GameState {
+        const newTurn: Color = this.turn === 'white' ? 'black' : 'white';
+        return new GameState(this.board, newTurn, this.mode, this.citadelSquares, this.isDraw);
+    }
+
+    /**
+     * Check if the game is a draw
+     */
+    isGameDraw(): boolean {
+        return this.isDraw === true;
+    }
+
+    /**
+     * Get occupancy for a specific color (for piece move generation)
+     */
+    getOccupancy(color: Color): Bitboard {
+        return this.board.getOccupancy(color);
+    }
+
+    /**
+     * Get all occupancy (for piece move generation)
+     */
+    getAllOccupancy(): Bitboard {
+        return this.board.getAllOccupancy();
+    }
+
+    /**
+     * Convert to the interface format expected by pieces (for move generation)
+     */
+    toPieceGameState(): {
+        mode: GameMode;
+        occupancy: Record<Color, Bitboard>;
+        allOccupancy: Bitboard;
+    } {
+        return {
+            mode: this.mode,
+            occupancy: {
+                white: this.board.getOccupancy('white'),
+                black: this.board.getOccupancy('black'),
+            },
+            allOccupancy: this.board.getAllOccupancy(),
+        };
+    }
+}

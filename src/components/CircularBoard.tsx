@@ -1,12 +1,10 @@
 import { useState, useEffect } from 'react';
 import { RINGS, FILES } from '../engine/types';
-import type { GameState } from '../engine/types';
-import { toIndex } from '../engine/topology';
-import { getLegalMoves } from '../engine/moveGeneration';
-import { getBit } from '../engine/bitboard';
+import { GameState } from '../engine/GameState';
+import { Coordinate } from '../engine/Coordinate';
+import { MoveGenerator } from '../engine/MoveGenerator';
+import { Bitboard } from '../engine/Bitboard';
 import { BOARD_THEMES, type BoardThemeName } from '../types/boardTheme';
-import { getChessPieceSvg, preloadChessPieces } from '../utils/chessPieceCache';
-import type { Color, PieceType } from '../engine/types';
 
 interface CircularBoardProps {
     gameState: GameState;
@@ -16,32 +14,20 @@ interface CircularBoardProps {
 
 const CircularBoard = ({ gameState, onMove, theme = 'dark' }: CircularBoardProps) => {
     const [selectedSquare, setSelectedSquare] = useState<number | null>(null);
-    const [legalMoves, setLegalMoves] = useState<bigint>(0n);
-    const [pieceSvgs, setPieceSvgs] = useState<Record<string, Record<string, string>>>({});
+    const [legalMoves, setLegalMoves] = useState<Bitboard>(Bitboard.empty());
     const [piecesLoaded, setPiecesLoaded] = useState(false);
     const boardTheme = BOARD_THEMES[theme];
 
-    // Load chess piece SVGs from cache or download them
+    // Load chess piece SVGs from piece instances
     useEffect(() => {
         const loadPieces = async () => {
             try {
-                // Preload all pieces
-                await preloadChessPieces();
+                const squares = gameState.board.getSquares();
+                const loadPromises = squares
+                    .filter((piece) => piece !== null)
+                    .map((piece) => piece!.getSvg());
 
-                // Load all piece SVGs into state
-                const colors: Color[] = ['white', 'black'];
-                const types: PieceType[] = ['king', 'queen', 'rook', 'bishop', 'knight', 'pawn'];
-
-                const svgMap: Record<string, Record<string, string>> = {};
-
-                for (const color of colors) {
-                    svgMap[color] = {};
-                    for (const type of types) {
-                        svgMap[color][type] = await getChessPieceSvg(color, type);
-                    }
-                }
-
-                setPieceSvgs(svgMap);
+                await Promise.all(loadPromises);
                 setPiecesLoaded(true);
             } catch (error) {
                 console.error('Failed to load chess pieces:', error);
@@ -49,7 +35,7 @@ const CircularBoard = ({ gameState, onMove, theme = 'dark' }: CircularBoardProps
         };
 
         loadPieces();
-    }, []);
+    }, [gameState]);
 
     // SVG Viewbox settings
     const SIZE = 1000;
@@ -90,26 +76,30 @@ const CircularBoard = ({ gameState, onMove, theme = 'dark' }: CircularBoardProps
     };
 
     const handleSquareClick = (ring: number, file: number) => {
-        const sq = toIndex(ring, file);
+        const coord = new Coordinate(ring, file);
+        const sq = coord.toIndex();
         if (sq === -1) return;
 
         if (selectedSquare === sq) {
             // Deselect
             setSelectedSquare(null);
-            setLegalMoves(0n);
-        } else if (selectedSquare !== null && getBit(legalMoves, sq)) {
+            setLegalMoves(Bitboard.empty());
+        } else if (selectedSquare !== null && legalMoves.getBit(sq)) {
             // Move to legal square
             onMove(selectedSquare, sq);
             setSelectedSquare(null);
-            setLegalMoves(0n);
-        } else if (gameState.board[sq]?.color === gameState.turn) {
-            // Select friendly piece
-            setSelectedSquare(sq);
-            setLegalMoves(getLegalMoves(gameState, sq));
+            setLegalMoves(Bitboard.empty());
         } else {
-            // Clicked empty or enemy square (and not a legal move)
-            setSelectedSquare(null);
-            setLegalMoves(0n);
+            const piece = gameState.board.getPiece(coord);
+            if (piece && piece.color === gameState.turn) {
+                // Select friendly piece
+                setSelectedSquare(sq);
+                setLegalMoves(MoveGenerator.getLegalMoves(gameState, coord));
+            } else {
+                // Clicked empty or enemy square (and not a legal move)
+                setSelectedSquare(null);
+                setLegalMoves(Bitboard.empty());
+            }
         }
     };
 
@@ -157,9 +147,10 @@ const CircularBoard = ({ gameState, onMove, theme = 'dark' }: CircularBoardProps
     const clickAreas = [];
     for (let r = 0; r < RINGS; r++) {
         for (let f = 0; f < FILES; f++) {
-            const sq = toIndex(r, f);
+            const coord = new Coordinate(r, f);
+            const sq = coord.toIndex();
             const isSelected = selectedSquare === sq;
-            const isLegalMove = getBit(legalMoves, sq);
+            const isLegalMove = sq !== -1 && legalMoves.getBit(sq);
             // Citadel squares are no longer on ring 0 - they're in the center circle
 
             // Calculate path for the wedge segment
@@ -361,14 +352,13 @@ const CircularBoard = ({ gameState, onMove, theme = 'dark' }: CircularBoardProps
             {/* Pieces */}
             {piecesLoaded && (
                 <g>
-                    {gameState.board.map((piece, index) => {
+                    {gameState.board.getSquares().map((piece, index) => {
                         if (!piece) return null;
-                        const ring = Math.floor(index / FILES);
-                        const file = index % FILES;
-                        const { x, y } = getSquareCenter(ring, file);
+                        const coord = Coordinate.fromIndex(index);
+                        const { x, y } = getSquareCenter(coord.ring, coord.file);
                         // Use maxPieceSize for all pieces to ensure they fit in the smallest space
                         const pieceSize = maxPieceSize;
-                        const svgUrl = pieceSvgs[piece.color]?.[piece.type];
+                        const svgUrl = piece.getSvgSync();
 
                         if (!svgUrl) return null;
 
